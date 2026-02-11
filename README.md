@@ -1,4 +1,5 @@
 # Plane Crashes Heat Map by Country - D3 Globe Visualization
+# https://csc316-project.github.io/crash_map_viz/
 
 A dynamic, interactive heat map visualization of historical plane crashes displayed by country on a 3D globe using D3.js.
 
@@ -14,7 +15,8 @@ A dynamic, interactive heat map visualization of historical plane crashes displa
   - Year slider to filter by time period
   - Hover over countries to see crash statistics
 
-### Run the Visualization
+
+### Run the Visualization Locally
 
 **Using Python HTTP Server **
 
