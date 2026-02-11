@@ -13,6 +13,8 @@ let currentCrashIndex = 0; // Current index in the selected crashes list
 let autoRotateEnabled = true; // Auto-rotate state
 let autoRotateInterval = null; // Auto-rotate interval reference
 let animationSpeed = 1.0; // Years per second for timeline animation
+let animationFrameId = null; // For requestAnimationFrame throttling
+let pendingUpdate = false; // Flag to prevent redundant updates
 
 console.log("Initializing globe visualization...");
 
@@ -207,11 +209,14 @@ function filterAndDrawCrashes() {
     // Clear canvas
     ctx.clearRect(0, 0, width, height);
     
-    // Create heat map data
-    const heatMapData = createHeatMapData(filteredCrashes);
-    
-    // Draw heat map
-    drawHeatMap(heatMapData);
+    // Only draw heat map if there are many crashes (performance optimization)
+    let heatMapData = [];
+    if (filteredCrashes.length > 500) {
+        // Create heat map data
+        heatMapData = createHeatMapData(filteredCrashes);
+        // Draw heat map
+        drawHeatMap(heatMapData);
+    }
     
     // Draw individual crash points
     drawCrashPoints(filteredCrashes);
@@ -285,30 +290,37 @@ function drawHeatMap(heatMapData) {
             }
         });
     
+    // Performance: Pre-calculate colors and batch operations
+    const visibleCells = [];
+    const scale = projection.scale();
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const maxDistance = scale + 50;
+    
     heatMapData.forEach(cell => {
         const [x, y] = projection([cell.lon, cell.lat]);
         
         // Check if point is visible (not behind the globe)
         if (x === null || y === null || isNaN(x) || isNaN(y)) return;
         
-        // Check if point is within visible area
-        const distance = Math.sqrt(Math.pow(x - width/2, 2) + Math.pow(y - height/2, 2));
-        if (distance > projection.scale() + 50) return; // Outside globe radius
+        // Check if point is within visible area (optimized distance check)
+        const dx = x - centerX;
+        const dy = y - centerY;
+        const distanceSq = dx * dx + dy * dy;
+        if (distanceSq > maxDistance * maxDistance) return;
         
-        // Calculate radius based on count
+        const color = d3.rgb(colorScale(cell.count));
         const radius = Math.sqrt(cell.count / maxCount) * 50;
         
-        // Create gradient
-        const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
-        const color = d3.rgb(colorScale(cell.count));
-        gradient.addColorStop(0, `rgba(${color.r}, ${color.g}, ${color.b}, 0.9)`);
-        gradient.addColorStop(0.3, `rgba(${color.r}, ${color.g}, ${color.b}, 0.6)`);
-        gradient.addColorStop(0.6, `rgba(${color.r}, ${color.g}, ${color.b}, 0.3)`);
-        gradient.addColorStop(1, `rgba(${color.r}, ${color.g}, ${color.b}, 0)`);
-        
-        ctx.fillStyle = gradient;
+        visibleCells.push({ x, y, color, radius });
+    });
+    
+    // Batch draw operations
+    visibleCells.forEach(cell => {
+        // Use simpler solid color instead of gradient for better performance
+        ctx.fillStyle = `rgba(${cell.color.r}, ${cell.color.g}, ${cell.color.b}, 0.7)`;
         ctx.beginPath();
-        ctx.arc(x, y, radius, 0, 2 * Math.PI);
+        ctx.arc(cell.x, cell.y, cell.radius, 0, 2 * Math.PI);
         ctx.fill();
     });
 }
@@ -319,8 +331,21 @@ function drawCrashPoints(crashes) {
     // Reset crash points array
     crashPoints = [];
     
-    // Draw all crash points
-    crashes.forEach(crash => {
+    // Performance optimization: sample points if there are too many
+    const MAX_POINTS = 2000; // Maximum points to draw for performance
+    let pointsToDraw = crashes;
+    if (crashes.length > MAX_POINTS) {
+        // Sample points, prioritizing higher fatality crashes
+        const sorted = [...crashes].sort((a, b) => b.fatalities - a.fatalities);
+        const highFatalities = sorted.slice(0, Math.floor(MAX_POINTS * 0.3)); // Keep top 30%
+        const remaining = sorted.slice(Math.floor(MAX_POINTS * 0.3));
+        const sampled = remaining.filter((_, i) => i % Math.ceil(remaining.length / (MAX_POINTS - highFatalities.length)) === 0);
+        pointsToDraw = [...highFatalities, ...sampled].slice(0, MAX_POINTS);
+        console.log("Sampled", crashes.length, "points down to", pointsToDraw.length);
+    }
+    
+    // Draw crash points
+    pointsToDraw.forEach(crash => {
         const [x, y] = projection([crash.lon, crash.lat]);
         
         // Check if point is visible
@@ -390,15 +415,18 @@ function setupControls() {
     
     console.log("Year range for slider:", minYear, "to", maxYear);
     
-    yearSlider
+        yearSlider
         .attr("min", minYear)
         .attr("max", maxYear)
         .attr("value", maxYear)
         .on("input", function() {
             currentYear = parseInt(this.value);
             yearDisplay.text(currentYear);
-            filterAndDrawCrashes();
-            updateGlobe();
+            // Throttle updates during slider drag
+            if (!pendingUpdate) {
+                filterAndDrawCrashes();
+                updateGlobe();
+            }
         });
     
     currentYear = maxYear;
@@ -576,24 +604,33 @@ function setupDragInteraction() {
         // Clamp vertical rotation to prevent flipping
         rotation.x = Math.max(-90, Math.min(90, rotation.x));
         
-        // Directly update projection and redraw (faster than calling updateGlobe)
-        projection.rotate([rotation.y, -rotation.x]);
-        svg.selectAll("path").attr("d", path);
+        // Throttle updates during drag for better performance
+        if (animationFrameId) return; // Skip if already scheduled
         
-        // Clear canvas and redraw crashes with updated coordinates
-        // This ensures click detection works after rotation
-        ctx.clearRect(0, 0, width, height);
-        
-        // Redraw heat map and crashes if we have filtered data
-        // This updates crashPoints array with new screen coordinates
-        if (filteredCrashes.length > 0) {
-            // Redraw heat map first
-            const heatMapData = createHeatMapData(filteredCrashes);
-            drawHeatMap(heatMapData);
+        animationFrameId = requestAnimationFrame(() => {
+            // Directly update projection and redraw (faster than calling updateGlobe)
+            projection.rotate([rotation.y, -rotation.x]);
+            svg.selectAll("path").attr("d", path);
             
-            // Then redraw crash points (this updates crashPoints array with new coordinates)
-            drawCrashPoints(filteredCrashes);
-        }
+            // Clear canvas and redraw crashes with updated coordinates
+            // This ensures click detection works after rotation
+            ctx.clearRect(0, 0, width, height);
+            
+            // Redraw heat map and crashes if we have filtered data
+            // This updates crashPoints array with new screen coordinates
+            if (filteredCrashes.length > 0) {
+                // Only redraw heat map if there are many crashes
+                if (filteredCrashes.length > 500) {
+                    const heatMapData = createHeatMapData(filteredCrashes);
+                    drawHeatMap(heatMapData);
+                }
+                
+                // Then redraw crash points (this updates crashPoints array with new coordinates)
+                drawCrashPoints(filteredCrashes);
+            }
+            
+            animationFrameId = null;
+        });
         
         previousMousePosition = { x: currentX, y: currentY };
     };
@@ -1130,17 +1167,24 @@ function updateLegend(heatMapData) {
 }
 
 function updateGlobe() {
-    // Update rotation - apply current rotation values
-    projection.rotate([rotation.y, -rotation.x]);
+    if (pendingUpdate) return; // Skip if update already scheduled
+    pendingUpdate = true;
     
-    // Redraw globe paths
-    svg.selectAll("path").attr("d", path);
+    // Use requestAnimationFrame for smooth updates
+    if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+    }
     
-    // console.log("Globe updated, rotation:", rotation); 
-    
-    // Redraw crashes (only if we have filtered data)
-    if (filteredCrashes.length > 0) {
-        filterAndDrawCrashes();
+    animationFrameId = requestAnimationFrame(() => {
+        // Update rotation - apply current rotation values
+        projection.rotate([rotation.y, -rotation.x]);
+        
+        // Redraw globe paths
+        svg.selectAll("path").attr("d", path);
+        
+        // Redraw crashes (only if we have filtered data)
+        if (filteredCrashes.length > 0) {
+            filterAndDrawCrashes();
         
         // If crashes are selected, update the list and re-show current crash
         if (selectedCrashes.length > 0) {
@@ -1189,5 +1233,9 @@ function updateGlobe() {
         const infoContent = d3.select(".info-box-content");
         hideCrashInfo(infoBox, infoContent);
     }
+    
+    pendingUpdate = false;
+    animationFrameId = null;
+    });
 }
 
