@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plane Crashes Heat Map - Globe Visualization</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://d3js.org/topojson.v3.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Plane Crashes Heat Map</h1>
+        <p class="subtitle">Historical plane crash data visualized on a 3D globe with coordinate-based heat map</p>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label for="year-slider">Year:</label>
+                <input type="range" id="year-slider" min="1908" max="2023" value="2023" step="1">
+                <span id="year-display">2023</span>
+            </div>
+            <div class="control-group">
+                <button id="play-pause">Play</button>
+                <button id="reset">Reset</button>
+            </div>
+            <div class="control-group">
+                <label for="speed-slider">Speed:</label>
+                <input type="range" id="speed-slider" min="0.1" max="10" value="1" step="0.1">
+                <span id="speed-display">1.0</span> years/sec
+            </div>
+        </div>
+
+        <div class="stats">
+            <span id="crash-count">Loading...</span> crashes displayed
+        </div>
+
+        <div id="legend" class="legend">
+            <div class="legend-content">
+                <div class="legend-title">Crash Density Scale</div>
+                <div class="legend-items" id="legend-items">
+                    <!-- Dynamic legend will be generated here -->
+                </div>
+            </div>
+        </div>
+
+        <div id="globe-container">
+            <div class="loading">Loading globe and data...</div>
+            <button id="auto-rotate-btn">Stop Auto-Rotate</button>
+        </div>
+
+        <div id="crash-info-box" class="crash-info-box">
+            <div class="info-box-content">
+                <p class="info-placeholder">Click on a crash point to see details</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="globe-visualization.js"></script>
+</body>
+</html>
