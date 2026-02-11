@@ -1,5 +1,4 @@
 // D3 Globe Heat Map Visualization for Plane Crashes
-// TODO: maybe add more colors later?
 
 const width = 960;
 const height = 600;
@@ -21,7 +20,7 @@ console.log("Initializing globe visualization...");
 let clickStartTime = 0;
 let clickStartPos = { x: 0, y: 0 };
 let wasDragging = false;
-const CLICK_THRESHOLD = 5; // pixels - if moved more than this, its a drag not a click (typo: its)
+const CLICK_THRESHOLD = 5; // pixels - if moved more than this, it's a drag not a click
 const CLICK_DURATION = 200; // ms - if longer than this, its a drag not a click
 
 // Remove loading message but keep the button
@@ -348,7 +347,6 @@ function drawCrashPoints(crashes) {
     
     // Draw all crash points (no sampling to ensure all are clickable)
     crashes.forEach(crash => {
-        // console.log("Drawing point for crash:", crash); // commented out - too verbose
         const [x, y] = projection([crash.lon, crash.lat]);
         
         // Check if point is visible
@@ -528,7 +526,6 @@ function startAutoRotate() {
         if (!isDragging && autoRotateEnabled) {
             rotation.y += 0.2;
             updateGlobe();
-            // console.log("Auto-rotating, rotation.y:", rotation.y); // too verbose
         }
     }, 50);
     
@@ -590,7 +587,6 @@ function setupDragInteraction() {
             return;
         }
         
-        // console.log("Mouse move during drag"); // too verbose, commented out
         
         event.preventDefault();
         event.stopPropagation();
