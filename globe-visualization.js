@@ -61,21 +61,13 @@ let previousMousePosition = { x: 0, y: 0 };
 console.log("Globe setup complete, rotation:", rotation);
 
 
-// Load world map data - try different file names
+// Load world map data
 function loadCSV() {
-    console.log("Attempting to load CSV file...");
+    console.log("Attempting to load Plane_Crashes_with_Coordinates.csv...");
     return d3.csv("Plane_Crashes_with_Coordinates.csv")
-        .catch(() => {
-            console.log("First file not found, trying alternative...");
-            return d3.csv("plane_crashes.csv");
-        })
-        .catch(() => {
-            console.log("Second file not found, trying another...");
-            return d3.csv("Plane Crashes.csv");
-        })
-        .catch(() => {
-            console.error("All CSV files failed to load");
-            throw new Error("Could not find CSV file. Please ensure 'Plane_Crashes_with_Coordinates.csv', 'plane_crashes.csv' or 'Plane Crashes.csv' exists.");
+        .catch(error => {
+            console.error("File failed to load:", error);
+            throw new Error("Could not find 'Plane_Crashes_with_Coordinates.csv'.");
         });
 }
 
@@ -154,24 +146,6 @@ Promise.all([
     d3.select("#globe-container")
         .select(".loading")
         .remove();
-    
-    // Add error message but keep the button
-    d3.select("#globe-container")
-        .append("div")
-        .attr("style", "text-align: center; padding: 50px; color: white;")
-        .html(`
-            <h2>Error loading data</h2>
-            <p>Please make sure:</p>
-            <ul style="text-align: left; display: inline-block;">
-                <li>The CSV file is named "Plane_Crashes_with_Coordinates.csv" and is in the same directory</li>
-                <li>The CSV file has Latitude and Longitude columns</li>
-                <li>You are running a local server (not opening the file directly)</li>
-            </ul>
-            <p style="margin-top: 20px;">For local development, run a local server:</p>
-            <code style="background: rgba(0,0,0,0.3); padding: 10px; border-radius: 5px; display: block; margin: 10px auto; width: fit-content;">
-                python -m http.server 8000
-            </code>
-        `);
 });
 
 function drawGlobe(world) {
@@ -188,7 +162,7 @@ function drawGlobe(world) {
         .attr("stroke", "#16213e")
         .attr("stroke-width", 0.8);
 
-    // Draw graticule (grid lines) with improved styling
+    // Draw graticule
     const graticule = d3.geoGraticule();
     svg.append("path")
         .datum(graticule)
@@ -345,7 +319,7 @@ function drawCrashPoints(crashes) {
     // Reset crash points array
     crashPoints = [];
     
-    // Draw all crash points (no sampling to ensure all are clickable)
+    // Draw all crash points
     crashes.forEach(crash => {
         const [x, y] = projection([crash.lon, crash.lat]);
         
@@ -449,8 +423,6 @@ function setupControls() {
     
     function startAnimation() {
         // Calculate interval based on speed (years per second)
-        // If speed is 1 year/sec, update every 1000ms
-        // If speed is 2 years/sec, update every 500ms, etc.
         const intervalMs = Math.max(50, Math.floor(1000 / animationSpeed));
         
         playInterval = setInterval(() => {
@@ -597,7 +569,7 @@ function setupDragInteraction() {
         const dx = currentX - previousMousePosition.x;
         const dy = currentY - previousMousePosition.y;
         
-        // Rotate based on mouse movement (like Google Earth)
+        // Rotate based on mouse movement
         rotation.y += dx * 0.5;
         rotation.x += dy * 0.5;
         
@@ -651,19 +623,19 @@ function setupDragInteraction() {
         }
     };
     
-    // Add mouse events to SVG and canvas (with namespace to avoid conflicts)
+    // Add mouse events to SVG and canvas
     svg.on("mousedown.drag", handleMouseDown);
     canvas.on("mousedown.drag", handleMouseDown);
     
     // Also add to container for better coverage
     d3.select("#globe-container").on("mousedown.drag", handleMouseDown);
     
-    // Use document-level events for smooth dragging (works even outside element)
+    // Use document-level events for smooth dragging
     d3.select(document)
         .on("mousemove.globe", handleMouseMove)
         .on("mouseup.globe", handleMouseUp);
     
-    // Add zoom with mouse wheel (smooth zoom like Google Earth)
+    // Add zoom with mouse wheel
     const handleWheel = function(event) {
         if (autoRotateEnabled) return;
         
@@ -1102,7 +1074,7 @@ function updateLegend(heatMapData) {
     const maxCount = d3.max(heatMapData, d => d.count) || 1;
     console.log("Max count for legend:", maxCount);
     
-    // Create color scale function (same as in drawHeatMap) - keep them in sync!
+    // Create color scale function
     const colorScale = d3.scaleSequential()
         .domain([0, maxCount])
         .interpolator(t => {
@@ -1164,7 +1136,7 @@ function updateGlobe() {
     // Redraw globe paths
     svg.selectAll("path").attr("d", path);
     
-    // console.log("Globe updated, rotation:", rotation); // commented - too frequent
+    // console.log("Globe updated, rotation:", rotation); 
     
     // Redraw crashes (only if we have filtered data)
     if (filteredCrashes.length > 0) {
@@ -1189,7 +1161,7 @@ function updateGlobe() {
             }
             
             // Re-show current crash if still available
-            // Don't recreate the info box if it's already active (to avoid interfering with navigation)
+            // Don't recreate the info box if it's already active
             if (selectedCrashes.length > 0) {
                 const infoBox = d3.select("#crash-info-box");
                 
